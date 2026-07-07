@@ -1,7 +1,7 @@
 {
-  "id": "webapp-store-launcher",
-  "name": "WebApp Store Launcher",
-  "short_name": " AppApp Store",
+  "id": "apap-store",
+  "name": "АпАп Магазин",
+  "short_name": "АпАп",
   "description": "Единый каталог и рабочий стол для ваших PWA приложений",
   "start_url": "/index.php",
   "display": "standalone",

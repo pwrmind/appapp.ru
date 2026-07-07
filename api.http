@@ -1,0 +1,29 @@
+curl -X POST http://localhost:8000/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://online.vtb.ru/"}'
+
+###
+
+POST http://localhost:8000/api_add.php
+Authorization: Bearer super_secret_pwa_token_2026_xyz
+Content-Type: application/json
+
+{
+  "url":"https://xn--80aa8bb.xn--p1ai/"
+}
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://online.vtb.ru/", "manifest_url":"https://www.wildberries.ru/manifestv2.json
+"}'
+
+  
+###
+GET https://online.vtb.ru/
+
+
+###
+GET https://www.wildberries.ru/

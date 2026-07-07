@@ -32,11 +32,11 @@ function download_remote_file($file_url, $save_dir) {
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, ''); // автоматически обрабатывать gzip
     curl_setopt($ch, CURLOPT_USERAGENT,
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1');
+        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36');
 
     $success = curl_exec($ch);
-    // curl_close убран – с PHP 8.0 ресурс освобождается автоматически
     fclose($fp);
 
     if ($success && filesize($local_path) > 0) {
@@ -48,55 +48,112 @@ function download_remote_file($file_url, $save_dir) {
 }
 
 /**
- * Главная функция: принимает URL сайта, извлекает PWA‑манифест,
- * загружает иконки/скриншоты, определяет категорию, проверяет
- * белые списки и сохраняет всё в базу данных.
+ * Загрузка манифеста: 1) явный URL, 2) стандартный /manifest.json, 3) поиск в HTML.
+ * Возвращает строку с JSON или false.
  */
-function add_pwa_to_catalog($site_url) {
+function fetch_manifest($site_url, $explicit_manifest_url = null) {
+    // 1. Если передан явный URL манифеста – пробуем его
+    if (!empty($explicit_manifest_url)) {
+        if (parse_url($explicit_manifest_url, PHP_URL_SCHEME) === null) {
+            $explicit_manifest_url = rtrim($site_url, '/') . '/' . ltrim($explicit_manifest_url, '/');
+        }
+        $ch = curl_init($explicit_manifest_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json, text/plain, */*',
+            'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
+        ]);
+        $response = curl_exec($ch);
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $response) {
+            return $response;
+        }
+    }
+
+    // 2. Стандартный /manifest.json
+    $url = rtrim($site_url, '/') . '/manifest.json';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json, text/plain, */*',
+        'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
+    ]);
+    $response = curl_exec($ch);
+    if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $response) {
+        return $response;
+    }
+
+    // 3. Поиск в HTML
+    $ch = curl_init($site_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    curl_setopt($ch, CURLOPT_USERAGENT,
+        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36');
+    $html = curl_exec($ch);
+    if (!$html) return false;
+
+    if (preg_match('/<link[^>]+rel=["\']manifest["\'][^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
+        $manifestPath = $matches[1];
+        if (parse_url($manifestPath, PHP_URL_SCHEME) === null) {
+            $manifestUrl = rtrim($site_url, '/') . '/' . ltrim($manifestPath, '/');
+        } else {
+            $manifestUrl = $manifestPath;
+        }
+        $ch = curl_init($manifestUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json, text/plain, */*',
+            'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
+        ]);
+        $response = curl_exec($ch);
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+            return $response;
+        }
+    }
+    return false;
+}
+
+/**
+ * Главная функция: принимает URL сайта и опциональный URL манифеста.
+ * Извлекает PWA‑манифест, загружает иконки/скриншоты, определяет категорию,
+ * проверяет белые списки и сохраняет всё в базу данных.
+ */
+function add_pwa_to_catalog($site_url, $manifest_url = null) {
     $site_url = rtrim($site_url, '/');
     if (!filter_var($site_url, FILTER_VALIDATE_URL)) return "Неверный формат ссылки.";
 
-    // 1. Получаем HTML главной страницы
-    $ch = curl_init($site_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_USERAGENT,
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1');
-    $html = curl_exec($ch);
-    // curl_close убран
-    if (!$html) return "Не удалось открыть сайт.";
-
-    // 2. Ищем ссылку на манифест в HTML
-    if (!preg_match('/<link[^>]+rel=["\']manifest["\'][^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
-        return "На сайте не найден PWA-манифест.";
+    // 1. Загружаем содержимое манифеста
+    $manifest_response = fetch_manifest($site_url, $manifest_url);
+    if ($manifest_response === false || !is_string($manifest_response)) {
+        return "Не удалось найти или загрузить манифест. Убедитесь, что сайт является PWA и манифест доступен.";
     }
 
-    $manifest_path = $matches[1];
-    if (parse_url($manifest_path, PHP_URL_SCHEME) === null) {
-        $manifest_url = $site_url . '/' . ltrim($manifest_path, '/');
-    } else {
-        $manifest_url = $manifest_path;
+    // 2. Минимальная очистка: BOM и замена управляющих символов
+    $json = str_replace("\xEF\xBB\xBF", '', $manifest_response);   // удалить BOM
+    $json = str_replace(["\t", "\r", "\n"], ' ', $json);          // табуляции и переносы внутри строк -> пробел
+
+    $manifest = json_decode($json, true);
+    if (!$manifest) {
+        $err = json_last_error_msg();
+        $preview = substr($json, 0, 200);
+        return "Ошибка чтения JSON: $err. Содержимое: $preview";
     }
 
-    // 3. Загружаем содержимое манифеста
-    $ch = curl_init($manifest_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $manifest_json = curl_exec($ch);
-    // curl_close убран
-    if (!$manifest_json) return "Не удалось скачать файл манифеста по адресу: " . $manifest_url;
-
-    $manifest = json_decode($manifest_json, true);
-    if (!$manifest) return "Ошибка чтения JSON структуры в манифесте.";
-
-    // 4. Извлекаем текстовые данные
+    // 3. Извлекаем текстовые данные
     $title = $manifest['name'] ?? $manifest['short_name'] ?? parse_url($site_url, PHP_URL_HOST);
     $description = $manifest['description'] ?? 'Прогрессивное веб-приложение (PWA) для мобильных устройств.';
 
-    // 5. Умное определение категории
+    // 4. Умное определение категории
     $final_category = 'Инструменты';
     $manifest_categories = !empty($manifest['categories']) ? array_map('strtolower', (array)$manifest['categories']) : [];
     foreach ($manifest_categories as $cat_tag) {
@@ -113,8 +170,10 @@ function add_pwa_to_catalog($site_url) {
             $final_category = 'Новости'; break;
         }
     }
-    if ($final_category === 'Инструменты') {
-        $desc_lower = mb_strtolower($description);
+
+    // Дополнительная проверка по описанию (только если есть mbstring)
+    if ($final_category === 'Инструменты' && extension_loaded('mbstring')) {
+        $desc_lower = mb_strtolower($description, 'UTF-8');
         if (mb_strpos($desc_lower, 'игра') !== false || mb_strpos($desc_lower, 'game') !== false) {
             $final_category = 'Игры';
         } elseif (mb_strpos($desc_lower, 'магазин') !== false || mb_strpos($desc_lower, 'купить') !== false) {
@@ -122,7 +181,7 @@ function add_pwa_to_catalog($site_url) {
         }
     }
 
-    // 6. Скачивание иконки
+    // 5. Скачивание иконки
     $local_icon_url = '';
     if (!empty($manifest['icons']) && is_array($manifest['icons'])) {
         $last_icon = end($manifest['icons']);
@@ -137,7 +196,7 @@ function add_pwa_to_catalog($site_url) {
         }
     }
 
-    // 7. Скачивание скриншотов
+    // 6. Скачивание скриншотов
     $local_screenshots_paths = [];
     if (!empty($manifest['screenshots']) && is_array($manifest['screenshots'])) {
         foreach ($manifest['screenshots'] as $screen) {
@@ -157,13 +216,11 @@ function add_pwa_to_catalog($site_url) {
     }
     $screenshots_string = implode(',', $local_screenshots_paths);
 
-    // 8. Автоматическая проверка белого списка РФ
+    // 7. Автоматическая проверка белого списка РФ
     $app_host = parse_url($site_url, PHP_URL_HOST);
     $is_whitelisted = 0;
-
     $ip_address = gethostbyname($app_host);
-    if ($ip_address !== $app_host) { // домен успешно резолвится
-        // Пробуем обратиться к публичному API проверки блокировок (эмуляция)
+    if ($ip_address !== $app_host) {
         $ctx = stream_context_create(['http' => ['timeout' => 3]]);
         $rkn_check = @file_get_contents("https://isblocked.ru/" . urlencode($app_host), false, $ctx);
         if ($rkn_check) {
@@ -174,14 +231,13 @@ function add_pwa_to_catalog($site_url) {
                 }
             }
         } else {
-            // Резервный вариант: если HTTPS и домен .ru / .рф — считаем безопасным
             if (preg_match('/\.(ru|рф)$/i', $app_host) && strpos($site_url, 'https://') === 0) {
                 $is_whitelisted = 1;
             }
         }
     }
 
-    // 9. Сохраняем в базу данных
+    // 8. Сохраняем в базу данных
     try {
         $db = new PDO(DB_PATH);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
