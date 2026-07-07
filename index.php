@@ -180,7 +180,7 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
 </head>
 <body>
 <div class="container">
-    <h1>📱 WebApp Store</h1>
+    <h1>📱 AppApp Store</h1>
 
     <!-- Баннер установки самого магазина -->
     <div id="own-pwa-banner" style="display: none;">
