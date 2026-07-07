@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /index.php
+Allow: /app.php
+Allow: /uploads/
+Disallow: /config.php
+Disallow: /parser.php
+Disallow: /api_add.php
+Disallow: /database.db
+
+Sitemap: https://yourdomain.com/sitemap.php
