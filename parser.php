@@ -2,24 +2,15 @@
 // parser.php
 require_once 'config.php';
 
-/**
- * Очистка строки для безопасного использования в имени файла
- */
 function clean_extension($string) {
     return preg_replace('/[^a-zA-Z0-9]/', '', $string);
 }
 
-/**
- * Скачивание удалённого файла (иконки, скриншота) в локальное хранилище.
- * Возвращает относительный путь к файлу при успехе или null.
- */
-function download_remote_file($file_url, $save_dir) {
+function download_remote_file($file_url, $save_dir, $cookies = null) {
     if (empty($file_url)) return null;
-
     $path_info = pathinfo(parse_url($file_url, PHP_URL_PATH));
     $extension = !empty($path_info['extension']) ? $path_info['extension'] : 'png';
     $extension = substr(clean_extension($extension), 0, 4);
-
     $local_name = uniqid('pwa_', true) . '.' . $extension;
     $local_path = $save_dir . $local_name;
 
@@ -32,9 +23,12 @@ function download_remote_file($file_url, $save_dir) {
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_ENCODING, ''); // автоматически обрабатывать gzip
+    curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_USERAGENT,
         'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36');
+    if (!empty($cookies)) {
+        curl_setopt($ch, CURLOPT_COOKIE, $cookies);
+    }
 
     $success = curl_exec($ch);
     fclose($fp);
@@ -47,57 +41,71 @@ function download_remote_file($file_url, $save_dir) {
     }
 }
 
-/**
- * Загрузка манифеста: 1) явный URL, 2) стандартный /manifest.json, 3) поиск в HTML.
- * Возвращает строку с JSON или false.
- */
-function fetch_manifest($site_url, $explicit_manifest_url = null) {
-    // 1. Если передан явный URL манифеста – пробуем его
+function curl_get($url, $accept = 'application/json, text/plain, */*', $referer = null, $cookies = null) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    $headers = [
+        'Accept: ' . $accept,
+        'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
+    ];
+    if ($referer) {
+        $headers[] = 'Referer: ' . $referer;
+    }
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    if (!empty($cookies)) {
+        curl_setopt($ch, CURLOPT_COOKIE, $cookies);
+    }
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$response, $httpCode];
+}
+
+function looks_like_json($str) {
+    $trimmed = ltrim($str);
+    return isset($trimmed[0]) && ($trimmed[0] === '{' || $trimmed[0] === '[');
+}
+
+function fetch_manifest($site_url, $explicit_manifest_url = null, $cookies = null) {
+    // 1. Явный URL манифеста
     if (!empty($explicit_manifest_url)) {
         if (parse_url($explicit_manifest_url, PHP_URL_SCHEME) === null) {
             $explicit_manifest_url = rtrim($site_url, '/') . '/' . ltrim($explicit_manifest_url, '/');
         }
-        $ch = curl_init($explicit_manifest_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: application/json, text/plain, */*',
-            'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
-        ]);
-        $response = curl_exec($ch);
-        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $response) {
+        list($response, $httpCode) = curl_get(
+            $explicit_manifest_url,
+            'application/manifest+json, application/json, text/plain, */*',
+            $site_url . '/',
+            $cookies
+        );
+        if ($httpCode === 200 && $response && looks_like_json($response)) {
             return $response;
         }
     }
 
     // 2. Стандартный /manifest.json
     $url = rtrim($site_url, '/') . '/manifest.json';
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_ENCODING, '');
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Accept: application/json, text/plain, */*',
-        'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
-    ]);
-    $response = curl_exec($ch);
-    if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $response) {
+    list($response, $httpCode) = curl_get(
+        $url,
+        'application/manifest+json, application/json, text/plain, */*',
+        $site_url . '/',
+        $cookies
+    );
+    if ($httpCode === 200 && $response && looks_like_json($response)) {
         return $response;
     }
 
-    // 3. Поиск в HTML
-    $ch = curl_init($site_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_ENCODING, '');
-    curl_setopt($ch, CURLOPT_USERAGENT,
-        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36');
-    $html = curl_exec($ch);
-    if (!$html) return false;
+    // 3. Поиск ссылки в HTML
+    list($html, $httpCode) = curl_get(
+        $site_url,
+        'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        null,
+        $cookies
+    );
+    if ($httpCode !== 200 || !$html) return false;
 
     if (preg_match('/<link[^>]+rel=["\']manifest["\'][^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
         $manifestPath = $matches[1];
@@ -106,42 +114,57 @@ function fetch_manifest($site_url, $explicit_manifest_url = null) {
         } else {
             $manifestUrl = $manifestPath;
         }
-        $ch = curl_init($manifestUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: application/json, text/plain, */*',
-            'User-Agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
-        ]);
-        $response = curl_exec($ch);
-        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+        list($response, $httpCode) = curl_get(
+            $manifestUrl,
+            'application/manifest+json, application/json, text/plain, */*',
+            $site_url . '/',
+            $cookies
+        );
+        if ($httpCode === 200 && $response && looks_like_json($response)) {
             return $response;
         }
     }
+
     return false;
 }
 
 /**
- * Главная функция: принимает URL сайта и опциональный URL манифеста.
- * Извлекает PWA‑манифест, загружает иконки/скриншоты, определяет категорию,
- * проверяет белые списки и сохраняет всё в базу данных.
+ * Определяет или создаёт разработчика по манифесту и URL.
  */
-function add_pwa_to_catalog($site_url, $manifest_url = null) {
+function get_or_create_developer($manifest, $site_url) {
+    $domain = parse_url($site_url, PHP_URL_HOST);
+    $developer_name = $manifest['author'] ?? $manifest['developer'] ?? null;
+    if (!$developer_name) {
+        $developer_name = ucfirst(preg_replace('/^www\./', '', $domain));
+        $developer_name = preg_replace('/\.(com|ru|org|net|рф|su).*$/i', '', $developer_name);
+        $developer_name = ucfirst($developer_name);
+    }
+    $db = new PDO(DB_PATH);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // Ищем разработчика по имени
+    $stmt = $db->prepare("SELECT id FROM developers WHERE name = :name");
+    $stmt->execute([':name' => $developer_name]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) {
+        return $row['id'];
+    }
+    // Создаём
+    $stmt = $db->prepare("INSERT INTO developers (name, website) VALUES (:name, :website)");
+    $stmt->execute([':name' => $developer_name, ':website' => $site_url]);
+    return $db->lastInsertId();
+}
+
+function add_pwa_to_catalog($site_url, $manifest_url = null, $cookies = null) {
     $site_url = rtrim($site_url, '/');
     if (!filter_var($site_url, FILTER_VALIDATE_URL)) return "Неверный формат ссылки.";
 
-    // 1. Загружаем содержимое манифеста
-    $manifest_response = fetch_manifest($site_url, $manifest_url);
+    $manifest_response = fetch_manifest($site_url, $manifest_url, $cookies);
     if ($manifest_response === false || !is_string($manifest_response)) {
-        return "Не удалось найти или загрузить манифест. Убедитесь, что сайт является PWA и манифест доступен.";
+        return "Не удалось найти или загрузить манифест.";
     }
 
-    // 2. Минимальная очистка: BOM и замена управляющих символов
-    $json = str_replace("\xEF\xBB\xBF", '', $manifest_response);   // удалить BOM
-    $json = str_replace(["\t", "\r", "\n"], ' ', $json);          // табуляции и переносы внутри строк -> пробел
-
+    $json = str_replace("\xEF\xBB\xBF", '', $manifest_response);
+    $json = str_replace(["\t", "\r", "\n"], ' ', $json);
     $manifest = json_decode($json, true);
     if (!$manifest) {
         $err = json_last_error_msg();
@@ -149,39 +172,24 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
         return "Ошибка чтения JSON: $err. Содержимое: $preview";
     }
 
-    // 3. Извлекаем текстовые данные
+    // Основная информация
     $title = $manifest['name'] ?? $manifest['short_name'] ?? parse_url($site_url, PHP_URL_HOST);
     $description = $manifest['description'] ?? 'Прогрессивное веб-приложение (PWA) для мобильных устройств.';
-
-    // 4. Умное определение категории
     $final_category = 'Инструменты';
     $manifest_categories = !empty($manifest['categories']) ? array_map('strtolower', (array)$manifest['categories']) : [];
     foreach ($manifest_categories as $cat_tag) {
-        if (strpos($cat_tag, 'game') !== false || strpos($cat_tag, 'arcade') !== false) {
-            $final_category = 'Игры'; break;
-        }
-        if (strpos($cat_tag, 'social') !== false || strpos($cat_tag, 'chat') !== false || strpos($cat_tag, 'communication') !== false) {
-            $final_category = 'Соцсети'; break;
-        }
-        if (strpos($cat_tag, 'shop') !== false || strpos($cat_tag, 'commerce') !== false) {
-            $final_category = 'Покупки'; break;
-        }
-        if (strpos($cat_tag, 'news') !== false || strpos($cat_tag, 'book') !== false || strpos($cat_tag, 'productivity') !== false) {
-            $final_category = 'Новости'; break;
-        }
+        if (strpos($cat_tag, 'game') !== false || strpos($cat_tag, 'arcade') !== false) { $final_category = 'Игры'; break; }
+        if (strpos($cat_tag, 'social') !== false || strpos($cat_tag, 'chat') !== false || strpos($cat_tag, 'communication') !== false) { $final_category = 'Соцсети'; break; }
+        if (strpos($cat_tag, 'shop') !== false || strpos($cat_tag, 'commerce') !== false) { $final_category = 'Покупки'; break; }
+        if (strpos($cat_tag, 'news') !== false || strpos($cat_tag, 'book') !== false || strpos($cat_tag, 'productivity') !== false) { $final_category = 'Новости'; break; }
     }
-
-    // Дополнительная проверка по описанию (только если есть mbstring)
     if ($final_category === 'Инструменты' && extension_loaded('mbstring')) {
         $desc_lower = mb_strtolower($description, 'UTF-8');
-        if (mb_strpos($desc_lower, 'игра') !== false || mb_strpos($desc_lower, 'game') !== false) {
-            $final_category = 'Игры';
-        } elseif (mb_strpos($desc_lower, 'магазин') !== false || mb_strpos($desc_lower, 'купить') !== false) {
-            $final_category = 'Покупки';
-        }
+        if (mb_strpos($desc_lower, 'игра') !== false || mb_strpos($desc_lower, 'game') !== false) { $final_category = 'Игры'; }
+        elseif (mb_strpos($desc_lower, 'магазин') !== false || mb_strpos($desc_lower, 'купить') !== false) { $final_category = 'Покупки'; }
     }
 
-    // 5. Скачивание иконки
+    // Иконка
     $local_icon_url = '';
     if (!empty($manifest['icons']) && is_array($manifest['icons'])) {
         $last_icon = end($manifest['icons']);
@@ -192,11 +200,11 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
             } else {
                 $remote_icon_url = $remote_icon_src;
             }
-            $local_icon_url = download_remote_file($remote_icon_url, 'uploads/icons/');
+            $local_icon_url = download_remote_file($remote_icon_url, 'uploads/icons/', $cookies);
         }
     }
 
-    // 6. Скачивание скриншотов
+    // Скриншоты
     $local_screenshots_paths = [];
     if (!empty($manifest['screenshots']) && is_array($manifest['screenshots'])) {
         foreach ($manifest['screenshots'] as $screen) {
@@ -207,7 +215,7 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
                 } else {
                     $remote_screen_url = $src;
                 }
-                $saved_path = download_remote_file($remote_screen_url, 'uploads/screenshots/');
+                $saved_path = download_remote_file($remote_screen_url, 'uploads/screenshots/', $cookies);
                 if ($saved_path) {
                     $local_screenshots_paths[] = $saved_path;
                 }
@@ -216,7 +224,7 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
     }
     $screenshots_string = implode(',', $local_screenshots_paths);
 
-    // 7. Автоматическая проверка белого списка РФ
+    // Белый список РФ
     $app_host = parse_url($site_url, PHP_URL_HOST);
     $is_whitelisted = 0;
     $ip_address = gethostbyname($app_host);
@@ -237,10 +245,19 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
         }
     }
 
-    // 8. Сохраняем в базу данных
+    // Определение разработчика
+    $developer_id = get_or_create_developer($manifest, $site_url);
+
+    // Сохранение в БД
     try {
         $db = new PDO(DB_PATH);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $db->exec("CREATE TABLE IF NOT EXISTS developers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            website TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
         $db->exec("CREATE TABLE IF NOT EXISTS apps (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -253,12 +270,14 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
             downloads INTEGER DEFAULT 0,
             is_verified INTEGER DEFAULT 0,
             is_whitelisted INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            developer_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (developer_id) REFERENCES developers(id)
         )");
 
         $stmt = $db->prepare("INSERT INTO apps 
-            (title, url, icon, description, category, screenshots, downloads, is_verified, is_whitelisted)
-            VALUES (:title, :url, :icon, :description, :category, :screenshots, :downloads, :is_verified, :is_whitelisted)");
+            (title, url, icon, description, category, screenshots, downloads, is_verified, is_whitelisted, developer_id)
+            VALUES (:title, :url, :icon, :description, :category, :screenshots, :downloads, :is_verified, :is_whitelisted, :developer_id)");
         $stmt->execute([
             ':title' => $title,
             ':url' => $site_url,
@@ -268,7 +287,8 @@ function add_pwa_to_catalog($site_url, $manifest_url = null) {
             ':screenshots' => $screenshots_string,
             ':downloads' => rand(250, 1800),
             ':is_verified' => 0,
-            ':is_whitelisted' => $is_whitelisted
+            ':is_whitelisted' => $is_whitelisted,
+            ':developer_id' => $developer_id
         ]);
         return "success";
     } catch (PDOException $e) {

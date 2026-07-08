@@ -17,10 +17,68 @@ Content-Type: application/json
 curl -X POST https://апап.рф/api_add.php \
   -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://online.vtb.ru/", "manifest_url":"https://www.wildberries.ru/manifestv2.json
-"}'
+  -d '{"url":"https://online.vtb.ru/", "manifest_url":"https://online.vtb.ru//manifest.json"}'
 
-  
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.wildberries.ru/", "manifest_url":"https://www.wildberries.ru/manifestv2.json"}'
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://alfabank.ru/everyday/online/alfaonline/", "manifest_url":"https://alfabank.ru/manifest.json"}'
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://m.avito.ru/", "manifest_url":"https://m.avito.ru/mstatic/manifest.json"}'
+
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.pochta.ru/", "manifest_url":"https://www.pochta.ru/manifest.json"}'
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.ozon.ru/", "manifest_url":"https://st.ozone.ru/s3/ozon-webmanifests/frontend-ozon-ru/desktop.webmanifest"}'
+
+
+###
+curl -X POST https://апап.рф/api_add.php \
+  -H "Authorization: Bearer super_secret_pwa_token_2026_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://m.vk.com/", "manifest_url":"https://m.vk.com/manifest.webmanifest?ver=228"}'
+
+###
+GET https://m.vk.com/manifest.webmanifest?ver=228
+Accept: application/json
+Content-Type: application/json
+
+###
+curl 'https://m.vk.com/manifest.webmanifest?ver=228' \
+  -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
+  -H 'accept-language: en-US,en;q=0.9,ru;q=0.8' \
+  -H 'cache-control: max-age=0' \
+  -b $'remixlang=0; remixscreen_width=1707; remixscreen_height=1067; remixscreen_dpr=1.5; remixdark_color_scheme=1; remixcolor_scheme_mode=auto; tmr_lvid=fc1f577136fbe57ef908c55167dbbd1d; tmr_lvidTS=1748437788436; remixscreen_orient=1; remixsf=1; remixmaudio=null; remixage18=1; _ga=GA1.1.1997275145.1772906287; vkmailru_authdata=get_credentials69c7980653d4b8.53324306; remixstid=640704582_oUP10hmBKAZwHmp4x1ei7KQbaUmTBoM5Na2z0Y6J5Ig; remixuas=ODUwYWYwNmNmYjZkMDMzM2UzMTNkZGJj; _ym_uid=1779110842178737664; _ym_d=1779110842; _ga_Q7JCGJ1GMD=GS2.1.s1779110841$o1$g0$t1779111155$j60$l0$h0; remixuacck=b680d475a73add459d; remixstlid=9065278994751331539_rlxvbpRLpGBJdDRZGZJKE09pdRgJQ6pKccJZWL8ljMs; remixsuc=1%3A; remixdmgr=c31e1bd3a7adfef6cd137c6b227481bbbe83779c70fc69764aae0905c98f355d; remixseenads=3; remixrefkey=e460b483feac66befd; remixpuad=bO4Q_EHZSuH96UDOHrBVopjLhPXiyLIyxJF5EvGIljs; remixscreen_depth=24; domain_sid=iR8DS0QxWPYGQqyg9zFGv%3A1783364892300; remixdt=0; _ga_21PHCHZ4P7=GS2.1.s1783367037$o2$g1$t1783367202$j60$l0$h0; remixscreen_winzoom=1.17; httoken=rOTL99-Jy69XqdBK_mHNKhxGTbEJhK3EgwLuxyzEbIVrJqnY2vqtGEMeSEYf9OMwPBl3259BLjf4ArITD5A3MEeT6GPg-YX12gWBQCI43pNazMV6KoyuBY7n9TjiiRVQeA; remixmdevice=1707/1067/1.5/\u0021\u0021-\u0021\u0021\u0021\u0021\u0021\u0021\u0021\u0021/1454; remixnsid=vk1.a.BC6yI2jHzISTogyojhkmbPpZdEkxiy0AAbpLF6xRznAxexYRyDbH_f2CKjXv80oO3xBH06yUHy7BZnLST_QN6sQ5j9xZNh1BXD2cT05wwMxrKedHAUmmC8TbgWtdZhpt0h4gt6rU5xqr9jY0zlbZy6dkx222ruXTuoICzenQ0UbhnB8WHbFl6JkE-duUkEzq; remixsid=1_SnhCGxJAMqe3D5Y4zL8FCyEOT84HfLDEktQAVx_QW5y62PUH0YNkAgF4Z10iulE7o0dmCXvyPHZIedAkl6a0eQ; remixff=10111111111111; tmr_detect=1%7C1783430754485; domain_sid=dLb0P-h0zFHPUZ90z6ZE9%3A1783430755241; remixua=17%7C135%7C172%7C401613080; remixgp=efb766e990e5c67c5dbc70f722955af4; remixcurr_audio=undefined; httoken=k8SpxAyu5G4fBzNTHoRKSOgopwEtCa8PPQtnq3UyBtR1FvSjh1E3vDg-VY2iU7or0Xkp-jHzAo19XZ2_sYrh8RNh9y7RxxrOuYvOneCigtKo-_0u9MHpQLsRE4xfD2bM3g' \
+  -H 'priority: u=0, i' \
+  -H 'sec-ch-ua: "Not;A=Brand";v="8", "Chromium";v="150", "Microsoft Edge";v="150"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  -H 'sec-fetch-dest: document' \
+  -H 'sec-fetch-mode: navigate' \
+  -H 'sec-fetch-site: none' \
+  -H 'sec-fetch-user: ?1' \
+  -H 'upgrade-insecure-requests: 1' \
+  -H 'user-agent: Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36'
+
 ###
 GET https://online.vtb.ru/
 

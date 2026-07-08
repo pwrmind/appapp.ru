@@ -2,14 +2,12 @@
 // api_add.php
 header('Content-Type: application/json; charset=utf-8');
 
-// На время отладки можно включить, в production закомментировать
 ini_set('display_errors', 0);
 error_reporting(0);
 
 require_once 'config.php';
 require_once 'parser.php';
 
-// Только метод POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode([
@@ -19,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Извлечение заголовка Authorization
 $headers = getallheaders();
 $auth_header = $headers['Authorization'] ?? $headers['authorization'] ?? '';
 if (empty($auth_header) || !preg_match('/Bearer\s(\S+)/', $auth_header, $matches)) {
@@ -41,7 +38,6 @@ if ($client_token !== API_SECRET_TOKEN) {
     exit;
 }
 
-// Получение параметров из тела запроса
 $input_data = json_decode(file_get_contents('php://input'), true);
 $url = $input_data['url'] ?? $_POST['url'] ?? '';
 if (empty($url)) {
@@ -53,11 +49,10 @@ if (empty($url)) {
     exit;
 }
 
-// Дополнительный параметр manifest_url (может отсутствовать)
 $manifest_url = $input_data['manifest_url'] ?? $_POST['manifest_url'] ?? null;
+$cookies = $input_data['cookies'] ?? $_POST['cookies'] ?? null;
 
-// Запуск парсинга
-$result = add_pwa_to_catalog($url, $manifest_url);
+$result = add_pwa_to_catalog($url, $manifest_url, $cookies);
 
 if ($result === 'success') {
     http_response_code(201);

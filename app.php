@@ -15,7 +15,11 @@ try {
     $db = new PDO(DB_PATH);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $stmt = $db->prepare("SELECT * FROM apps WHERE id = :id");
+    // Получаем приложение вместе с именем разработчика
+    $stmt = $db->prepare("SELECT apps.*, developers.name AS developer_name 
+                          FROM apps 
+                          LEFT JOIN developers ON apps.developer_id = developers.id 
+                          WHERE apps.id = :id");
     $stmt->execute([':id' => $app_id]);
     $app = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$app) {
@@ -23,14 +27,12 @@ try {
         die("Приложение не найдено");
     }
 
-    // Счётчик переходов
     $db->prepare("UPDATE apps SET downloads = downloads + 1 WHERE id = :id")->execute([':id' => $app_id]);
 
     // Похожие приложения
     $related_stmt = $db->prepare("SELECT id, title, icon, category, rating FROM apps WHERE category = :category AND id != :current_id ORDER BY RANDOM() LIMIT 4");
     $related_stmt->execute([':category' => $app['category'], ':current_id' => $app_id]);
     $related_apps = $related_stmt->fetchAll(PDO::FETCH_ASSOC);
-
     if (count($related_apps) < 4) {
         $needed = 4 - count($related_apps);
         $exclude_ids = array_merge([$app_id], array_column($related_apps, 'id'));
@@ -52,25 +54,20 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Скачать PWA <?= htmlspecialchars($app['title']) ?> на телефон бесплатно — WebApp Store</title>
+    <title>Скачать <?= htmlspecialchars($app['title']) ?> на телефон бесплатно — АпАп.рф</title>
     <meta name="description" content="Установите прогрессивное веб-приложение <?= htmlspecialchars($app['title']) ?> (категория: <?= htmlspecialchars($app['category']) ?>) на экран мобильного в один клик. Проверено: <?= ($app['is_verified'] == 1) ? 'Да' : 'В очереди' ?>.">
     <link rel="canonical" href="<?= $store_domain ?>/app.php?id=<?= $app['id'] ?>">
-
-    <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="<?= $store_domain ?>/app.php?id=<?= $app['id'] ?>">
     <meta property="og:title" content="Скачать PWA <?= htmlspecialchars($app['title']) ?> — WebApp Store">
     <meta property="og:description" content="Полноэкранная мобильная версия сайта <?= $app_domain ?>. Категория: <?= htmlspecialchars($app['category']) ?>.">
     <meta property="og:image" content="<?= $store_domain ?>/<?= htmlspecialchars($app['icon']) ?>">
-
-    <!-- PWA метатеги -->
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="App Store">
     <link rel="apple-touch-icon" href="<?= htmlspecialchars($app['icon']) ?>">
     <meta name="color-scheme" content="light dark">
-
     <style>
         :root {
             --bg-main: #f4f4f9; --bg-card: #ffffff; --bg-related: #f8f9fa;
@@ -100,7 +97,10 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
         .app-main-icon { width: 90px; height: 90px; border-radius: 20px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: #eee; flex-shrink: 0; }
         .app-title-block { min-width: 0; flex-grow: 1; }
         .app-title-block h1 { margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; }
-        .developer { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .developer { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px; }
+        .developer a { color: var(--btn-install-bg); text-decoration: none; }
+        .developer a:hover { text-decoration: underline; }
+        .domain { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .action-buttons { display: flex; align-items: center; gap: 10px; }
         .btn-install { display: inline-block; background: var(--btn-install-bg); color: var(--btn-install-text); font-weight: bold; padding: 10px 28px; border-radius: 22px; text-decoration: none; font-size: 0.95rem; text-align: center; box-shadow: 0 4px 12px rgba(0,127,246,0.2); }
         .share-btn { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 1.1rem; padding: 0; width: 42px; height: 42px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
@@ -124,8 +124,6 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
         .modal-content { background: var(--bg-card); color: var(--text-primary); padding: 24px; border-radius: 20px; max-width: 85%; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .modal-content p { font-size: 0.95rem; line-height: 1.4; color: var(--text-secondary); }
     </style>
-
-    <!-- Схема SoftwareApplication для звёздочек в выдаче -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -145,11 +143,13 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "<?= htmlspecialchars($app['developer_name'], ENT_QUOTES) ?>"
       }
     }
     </script>
-
-    <!-- Хлебные крошки -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -163,8 +163,6 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
       }]
     }
     </script>
-
-    <!-- FAQ для расширенного сниппета -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -195,7 +193,12 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
         <img class="app-main-icon" src="<?= htmlspecialchars($app['icon']) ?>" alt="Icon">
         <div class="app-title-block">
             <h1><?= htmlspecialchars($app['title']) ?></h1>
-            <div class="developer"><?= $app_domain ?></div>
+            <?php if (!empty($app['developer_name'])): ?>
+                <div class="developer">
+                    <a href="developer.php?id=<?= $app['developer_id'] ?>"><?= htmlspecialchars($app['developer_name']) ?></a>
+                </div>
+            <?php endif; ?>
+            <div class="domain"><?= $app_domain ?></div>
             <div class="action-buttons">
                 <a href="#" id="openAppBtn" class="btn-install">ОТКРЫТЬ</a>
                 <button id="shareBtn" class="share-btn">🔗</button>
@@ -263,7 +266,19 @@ $store_domain = "https://" . $_SERVER['HTTP_HOST'];
     <?php endif; ?>
 </div>
 
-<!-- Модальное окно инструкции -->
+<!-- ===== ФУТЕР ===== -->
+<footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-color); text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+    <div style="margin-bottom: 10px;">
+        <a href="about.php" style="color: var(--btn-install-bg); text-decoration: none; margin: 0 10px;">О проекте</a>
+        <a href="privacy.php" style="color: var(--btn-install-bg); text-decoration: none; margin: 0 10px;">Политика конфиденциальности</a>
+    </div>
+    <p style="margin: 0; line-height: 1.4;">
+        Все товарные знаки, логотипы и графические материалы принадлежат их законным владельцам.<br>
+        АпАп является независимым каталогом общедоступных веб-ссылок.
+    </p>
+</footer>
+<!-- ===== /ФУТЕР ===== -->
+
 <div id="installModal" class="modal">
     <div class="modal-content">
         <div id="instruction-ios" style="display:none;">

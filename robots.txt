@@ -1,10 +1,13 @@
 User-agent: *
 Allow: /index.php
 Allow: /app.php
+Allow: /about.php
+Allow: /privacy.php
 Allow: /uploads/
+Allow: /sitemap.php
 Disallow: /config.php
 Disallow: /parser.php
 Disallow: /api_add.php
 Disallow: /database.db
 
-Sitemap: https://yourdomain.com/sitemap.php
+Sitemap: https://апап.рф/sitemap.php
