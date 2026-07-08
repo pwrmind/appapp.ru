@@ -1,0 +1,24 @@
+:root {
+    --bg-main: #f4f4f9;
+    --bg-card: #ffffff;
+    --bg-related: #f8f9fa;
+    --text-primary: #111111;
+    --text-secondary: #555555;
+    --text-muted: #888888;
+    --border-color: #e0e0e0;
+    --btn-install-bg: #007ff6;
+    --btn-install-text: #ffffff;
+    --font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-main: #121214;
+        --bg-card: #1e1e22;
+        --bg-related: #26262b;
+        --text-primary: #f5f5f7;
+        --text-secondary: #a1a1aa;
+        --text-muted: #71717a;
+        --border-color: #2e2e33;
+    }
+}
